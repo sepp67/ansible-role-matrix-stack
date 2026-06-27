@@ -50,10 +50,18 @@
   no_log: true
   notify: Restart matrix-postgres
 
+- name: Pre-pull matrix-postgres image
+  community.docker.docker_image:
+    name: "postgres:{{ matrix_postgres_version }}"
+    source: pull
+    pull:
+      platform: linux/amd64
+  timeout: 600
+  no_log: false
+
 - name: Pull and start matrix-postgres
   community.docker.docker_compose_v2:
     project_src: "{{ matrix_base_dir }}/postgres"
-    pull: always
     state: present
   become: true
   become_user: "{{ deploy_user }}"
