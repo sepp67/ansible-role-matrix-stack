@@ -1,155 +1,286 @@
-ansible-role-matrix-stack
-Deploy a production-ready dual Matrix Synapse infrastructure with Ansible.
+# ansible-role-matrix-stack
+
+> Production-ready Ansible role to deploy a **dual-homeserver Matrix Synapse infrastructure** on Debian 12 using Docker Compose.
+
 This role deploys a complete Matrix backend composed of:
-    • PostgreSQL 
-    • Synapse Users 
-    • Synapse Bridges 
-using Docker Compose on Debian 12.
-The role is designed to be integrated into a larger infrastructure repository responsible for inventories, secrets, DNS, reverse proxy and environment-specific configuration.
 
-Why this role exists
-Many Matrix deployments mix together:
-    • Synapse 
-    • Bridges 
-    • Reverse proxy 
-    • DNS 
-    • Identity provider 
-This project deliberately separates those responsibilities.
-The Matrix stack becomes an independent Ansible role that can be reused in staging, production or customer infrastructures.
+* PostgreSQL 16
+* Synapse Users
+* Synapse Bridges
 
-Architecture
-                        Internet
-                             │
-                             ▼
-                    Reverse Proxy
-                   (Caddy / nginx)
-                             │
-         ┌───────────────────┼───────────────────┐
-         │                   │                   │
-         ▼                   ▼                   ▼
-   Synapse Users      Synapse Bridges      Keycloak
-         │                   │
-         └─────────────┬─────┘
-                       ▼
-                 PostgreSQL 16
+It is designed to be integrated into a larger infrastructure repository responsible for inventories, secrets, DNS, reverse proxy and environment-specific configuration.
 
-Responsibilities:
-Component    Managed by
-Matrix       this role
-PostgreSQL   this role
-Docker       this role
+---
 
-Reverse proxy     infrastructure repository
-DNS               infrastructure repository
-TLS certificates  infrastructure repository
-Ansible Vault     infrastructure repository
-Inventory         infrastructure repository
+# Why this role exists
 
-Features
-Current
-    • PostgreSQL 16 
-    • Dual Synapse deployment 
-    • Docker Compose 
-    • Persistent volumes 
-    • Idempotent deployment 
-    • Ready for reverse proxy 
-    • Ready for OIDC 
-    • Ready for Mautrix 
-Planned
-    • Keycloak integration 
-    • Matrix Authentication Service 
-    • Mautrix WhatsApp 
-    • Mautrix Signal 
-    • Mautrix Telegram 
-    • Draupnir 
-    • MatrixToken 
-    • Automated backup 
+Most Matrix deployments combine multiple responsibilities into a single project:
 
-Repository layout
-defaults/
-handlers/
-meta/
-tasks/
-templates/
-examples/
-The examples/ directory exists only to demonstrate standalone usage.
-Production deployments are expected to consume this role from an infrastructure repository.
+* Synapse
+* PostgreSQL
+* Reverse Proxy
+* DNS
+* TLS certificates
+* Identity Provider
+* Infrastructure inventory
 
-Installation
-Recommended (production)
+This project deliberately separates those concerns.
+
+The Matrix stack becomes an independent Ansible role that can be reused across staging, production or customer infrastructures while remaining completely infrastructure-agnostic.
+
+---
+
+# Architecture
+
+```text
+                           Internet
+                                │
+                                ▼
+                       Reverse Proxy
+                     (Caddy / nginx)
+                                │
+        ┌───────────────────────┼────────────────────────┐
+        │                       │                        │
+        ▼                       ▼                        ▼
+   Synapse Users         Synapse Bridges            Keycloak
+        │                       │
+        └───────────────┬───────┘
+                        ▼
+                   PostgreSQL 16
+```
+
+The recommended deployment uses three dedicated virtual machines:
+
+| VM                | Purpose            |
+| ----------------- | ------------------ |
+| vm-matrix-db      | PostgreSQL         |
+| vm-matrix-users   | User homeserver    |
+| vm-matrix-bridges | Bridges homeserver |
+
+---
+
+# Separation of responsibilities
+
+This role intentionally deploys **only the Matrix stack**.
+
+| Component        | Managed by              |
+| ---------------- | ----------------------- |
+| PostgreSQL       | ✅ This role             |
+| Synapse Users    | ✅ This role             |
+| Synapse Bridges  | ✅ This role             |
+| Docker / Compose | ✅ This role             |
+| Reverse Proxy    | External infrastructure |
+| DNS              | External infrastructure |
+| TLS certificates | External infrastructure |
+| Ansible Vault    | External infrastructure |
+| Inventory        | External infrastructure |
+| CI/CD            | External infrastructure |
+
+This separation keeps the role reusable while allowing different infrastructure repositories to consume it.
+
+---
+
+# Features
+
+## Current
+
+* PostgreSQL 16
+* Dual Synapse deployment
+* Docker Compose
+* Persistent volumes
+* Automatic Docker installation
+* Idempotent deployment
+* Ready for reverse proxy integration
+* Ready for OIDC integration
+* Production-oriented directory layout
+
+## Planned
+
+* Keycloak integration
+* Matrix Authentication Service (MAS)
+* Mautrix WhatsApp
+* Mautrix Signal
+* Mautrix Telegram
+* Draupnir moderation
+* MatrixToken invitation workflow
+* Automated backup role
+
+---
+
+# Repository structure
+
+```
+ansible-role-matrix-stack/
+
+├── defaults/
+├── handlers/
+├── meta/
+├── tasks/
+├── templates/
+├── examples/
+└── README.md
+```
+
+The `examples/` directory exists only to validate the role independently.
+
+Production deployments are expected to consume this role from a dedicated infrastructure repository.
+
+---
+
+# Installation
+
+## Recommended (production)
+
+Install the role as a Git dependency.
+
 requirements.yml
+
+```yaml
 roles:
   - src: https://github.com/sepp67/ansible-role-matrix-stack.git
     scm: git
     version: main
     name: matrix_stack
-Install
+```
+
+Install the dependencies:
+
+```bash
 ansible-galaxy install -r requirements.yml
-Deploy
+```
+
+Deploy:
+
+```bash
 ansible-playbook playbooks/deploy-matrix-stack.yml
+```
 
-Standalone (development)
-Clone
-git clone ...
-Run
+---
+
+## Standalone (development)
+
+For development or testing purposes, the role can also be executed independently.
+
+Clone the repository:
+
+```bash
+git clone https://github.com/sepp67/ansible-role-matrix-stack.git
+```
+
+Run the example playbook:
+
+```bash
 ansible-playbook examples/deploy-matrix-stack.yml
-This mode is intended only for testing the role independently.
+```
 
-Variables
-Au lieu des énormes tableaux, je ne garderais que les variables principales.
-Puis :
-See defaults/main.yml for the complete list.
-Ton defaults/main.yml est déjà auto-documenté.
-Le README n'a pas besoin de dupliquer ces 150 lignes.
+---
 
-Deployment
-Très simple.
-matrix_db
-↓
-PostgreSQL
-matrix_users
-↓
-Synapse Users
-matrix_bridges
-↓
-Synapse Bridges
-Puis
-ansible-playbook ...
+# Main configuration
 
-Validation
-Seulement :
+The role deploys one component depending on the variable:
+
+```yaml
+matrix_component:
+```
+
+Possible values:
+
+| Value           | Deployed component |
+| --------------- | ------------------ |
+| postgres        | PostgreSQL         |
+| synapse_users   | User homeserver    |
+| synapse_bridges | Bridges homeserver |
+
+Complete variable documentation is available in:
+
+```
+defaults/main.yml
+```
+
+---
+
+# Validation
+
+Basic deployment validation:
+
+```bash
 docker compose ps
-curl /_matrix/client/versions
-Puis
-For detailed validation procedures,
-see docs/validation.md
+```
 
-Integration
-Nouvelle section.
-This role intentionally does NOT configure:
-• Caddy
-• nginx
-• DNS
-• TLS
-• Let's Encrypt
-• Inventories
-• Vault
-Those responsibilities belong to the surrounding infrastructure repository.
-Je trouve cette partie très importante.
+Check the Matrix Client API:
 
-Roadmap
-Je transformerais la roadmap en cases à cocher.
-Current milestone
-[x] PostgreSQL
-[x] Synapse Users
-[x] Synapse Bridges
-Next
-[ ] Keycloak
-[ ] OIDC
-[ ] Matrix Authentication Service
-[ ] Mautrix WhatsApp
-[ ] Mautrix Signal
-[ ] Mautrix Telegram
-[ ] Draupnir
-[ ] MatrixToken
+```bash
+curl https://matrix-users.example.com/_matrix/client/versions
+```
 
+Check federation:
+
+```bash
+curl https://matrix-bridges.example.com/_matrix/federation/v1/version
+```
+
+---
+
+# Integration philosophy
+
+This role intentionally **does not** configure:
+
+* Reverse proxy
+* DNS
+* TLS certificates
+* Let's Encrypt
+* Inventories
+* Ansible Vault
+* CI/CD
+
+These responsibilities belong to the surrounding infrastructure repository.
+
+This design keeps the role portable and reusable.
+
+---
+
+# Roadmap
+
+## Current milestone
+
+* [x] PostgreSQL
+* [x] Synapse Users
+* [x] Synapse Bridges
+* [x] Docker Compose deployment
+
+## Next milestone
+
+* [ ] Keycloak OIDC
+* [ ] Matrix Authentication Service
+* [ ] Existing LDAP migration
+* [ ] Mautrix WhatsApp
+* [ ] Mautrix Signal
+* [ ] Mautrix Telegram
+* [ ] Draupnir
+* [ ] MatrixToken integration
+
+---
+
+# Related repositories
+
+This role is part of a larger infrastructure ecosystem.
+
+| Repository                | Purpose                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| devops_staging_prod_infra | Infrastructure orchestration (inventories, Caddy, Vault, staging & production) |
+| ansible-role-matrix-stack | Matrix deployment                                                              |
+| website-lavallee          | Technical documentation and portfolio                                          |
+
+---
+
+# License
+
+MIT
+
+---
+
+# Author
+
+**Sébastien Lavallée**
+
+Linux • DevOps • IAM • Open Source
