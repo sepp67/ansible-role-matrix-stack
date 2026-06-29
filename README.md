@@ -221,6 +221,51 @@ curl https://matrix-bridges.example.com/_matrix/federation/v1/version
 
 ---
 
+# CA trust for internal TLS (staging)
+
+In staging environments using Caddy with `tls internal`, Synapse must trust the Caddy local CA to establish TLS federation connections to other homeservers through the proxy.
+
+## Why not a custom Docker image
+
+Building a custom Docker image with the CA baked in is an anti-pattern for a local CA:
+
+* The Caddy CA changes whenever the proxy is reinstalled
+* Rebuilding and pushing an image on every CA rotation is fragile
+* The CA is an infrastructure artifact, not an application component
+
+## Why a dedicated entrypoint script
+
+The role ships `files/synapse-entrypoint.sh`:
+
+```sh
+#!/bin/sh
+set -e
+update-ca-certificates
+exec /start.py "$@"
+```
+
+This script is copied to the Synapse compose directory by Ansible and mounted read-only into the container. It runs `update-ca-certificates` (which picks up any cert in `/usr/local/share/ca-certificates/`) then immediately delegates to the official `/start.py` with all original arguments preserved (`"$@"` receives Docker's CMD, which is `start`).
+
+This approach:
+
+* avoids putting shell logic inside `docker-compose.yml`
+* keeps the behavior readable and debuggable
+* requires no custom image
+
+## How to enable
+
+Set `matrix_ca_cert_path` to the absolute path of the CA certificate on the host.
+The certificate must already exist on the host before Ansible runs the Matrix role — it is written by the separate `caddy_ca` role.
+
+```yaml
+# In staging group_vars (empty string = disabled)
+matrix_ca_cert_path: /opt/caddy-ca/caddy-root.crt
+```
+
+When `matrix_ca_cert_path` is empty (default), the entrypoint and cert mount are omitted and the official Synapse image runs without modification.
+
+---
+
 # Integration philosophy
 
 This role intentionally **does not** configure:

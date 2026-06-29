@@ -57,6 +57,16 @@ enable_registration_without_verification: false
 federation_domain_whitelist: []
 {% endif %}
 
+{% if matrix_synapse_ip_range_whitelist %}
+# Autorise la fédération vers des IPs privées RFC1918.
+# Requis en staging quand les homeservers communiquent via un proxy interne (Caddy).
+# Ne pas activer en production (fédération publique uniquement).
+ip_range_whitelist:
+{% for cidr in matrix_synapse_ip_range_whitelist %}
+  - "{{ cidr }}"
+{% endfor %}
+
+{% endif %}
 # Synapse sert lui-même les endpoints well-known sur port 8008.
 # Caddy fait passer les requêtes /.well-known/matrix/* vers ce port.
 serve_server_wellknown: true
@@ -86,3 +96,6 @@ oidc_providers:
 allow_guest_access: false
 presence:
   enabled: false
+
+# Requis par Synapse — doit être explicitement true ou false.
+report_stats: {{ matrix_report_stats | bool | lower }}

@@ -60,6 +60,16 @@
     group: "991"
     mode: "0750"
 
+- name: Deploy Synapse entrypoint script for {{ matrix_component }}
+  ansible.builtin.copy:
+    src: synapse-entrypoint.sh
+    dest: "{{ _synapse_compose_dir }}/synapse-entrypoint.sh"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0755"
+  when: matrix_ca_cert_path | length > 0
+  notify: Restart synapse
+
 - name: Deploy log configuration for {{ matrix_component }}
   ansible.builtin.template:
     src: log.config.j2

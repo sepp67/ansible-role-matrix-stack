@@ -11,8 +11,25 @@ services:
       - "{{ docker_bind_address }}:{{ _synapse_host_port }}:8008"
     environment:
       SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+{% if matrix_ca_cert_path | length > 0 %}
+    # Entrypoint dédié : installe la CA Caddy interne puis délègue à /start.py.
+    # Requis en staging (tls internal). Sans cela, les connexions fédération
+    # HTTPS vers d'autres homeservers via Caddy échouent avec :
+    # "SSL certificate problem: unable to get local issuer certificate".
+    entrypoint: ["/entrypoint.sh"]
+{% endif %}
     volumes:
       - "{{ _synapse_data_dir }}:/data"
+{% if matrix_ca_cert_path | length > 0 %}
+      - "{{ matrix_ca_cert_path }}:/usr/local/share/ca-certificates/caddy-root.crt:ro"
+      - "./synapse-entrypoint.sh:/entrypoint.sh:ro"
+{% endif %}
+{% if matrix_extra_hosts %}
+    extra_hosts:
+{% for host, ip in matrix_extra_hosts.items() %}
+      - "{{ host }}:{{ ip }}"
+{% endfor %}
+{% endif %}
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8008/_matrix/client/versions || exit 1"]
       interval: 30s

@@ -66,6 +66,35 @@ matrix_oidc_issuer: ""
 matrix_oidc_client_id: ""
 matrix_oidc_client_secret: ""
 
+# ── Statistiques d'usage ─────────────────────────────────────────────────────
+# Synapse exige que cette clé soit explicitement définie (true ou false).
+# false : aucune donnée envoyée à matrix.org.
+matrix_report_stats: false
+
 # ── Santé du conteneur ────────────────────────────────────────────────────────
 matrix_healthcheck_retries: 15
 matrix_healthcheck_delay: 5
+
+# ── Fédération — DNS interne ──────────────────────────────────────────────────
+# Entrées extra_hosts injectées dans les conteneurs Synapse.
+# Nécessaire quand les noms de domaine Matrix doivent résoudre vers le proxy
+# plutôt que vers les VMs Synapse elles-mêmes (fédération interne via Caddy).
+# Exemple :
+#   matrix_extra_hosts:
+#     "matrix-users.local": "192.168.1.56"
+#     "matrix-bridges.local": "192.168.1.56"
+matrix_extra_hosts: {}
+
+# ── Fédération — IP privées ───────────────────────────────────────────────────
+# Synapse refuse par défaut de contacter des IPs privées (RFC1918) en fédération.
+# En staging avec un proxy interne, il faut débloquer le sous-réseau LAN.
+# Laisser à [] en production (fédération publique uniquement).
+matrix_synapse_ip_range_whitelist: []
+
+# ── CA personnalisée (Caddy internal en staging) ──────────────────────────────
+# Chemin absolu du certificat CA sur l'hôte, monté en lecture seule dans le
+# conteneur Synapse. Le certificat est écrit par le rôle caddy_ca — ce rôle
+# ne connaît pas son origine.
+# Laisser à "" pour désactiver le montage (production ACME, Let's Encrypt est
+# déjà reconnu sans action supplémentaire).
+matrix_ca_cert_path: ""
