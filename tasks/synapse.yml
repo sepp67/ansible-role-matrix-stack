@@ -60,14 +60,45 @@
     group: "991"
     mode: "0750"
 
-- name: Deploy Synapse entrypoint script for {{ matrix_component }}
-  ansible.builtin.copy:
-    src: synapse-entrypoint.sh
-    dest: "{{ _synapse_compose_dir }}/synapse-entrypoint.sh"
-    owner: "{{ deploy_user }}"
-    group: "{{ deploy_user }}"
-    mode: "0755"
+- name: Check Caddy CA certificate presence for {{ matrix_component }}
+  ansible.builtin.stat:
+    path: "{{ matrix_ca_cert_path }}"
+  register: _matrix_ca_cert_stat
   when: matrix_ca_cert_path | length > 0
+
+- name: Warn if CA certificate not found for {{ matrix_component }}
+  ansible.builtin.debug:
+    msg: >-
+      matrix_ca_cert_path est défini ({{ matrix_ca_cert_path }}) mais le fichier
+      n'existe pas encore sur cet hôte. Lancez un déploiement complet (sans
+      --limit) pour que le rôle caddy_ca distribue le certificat au préalable.
+  when:
+    - matrix_ca_cert_path | length > 0
+    - not _matrix_ca_cert_stat.stat.exists
+
+- name: Copy Caddy CA certificate into Synapse data directory for {{ matrix_component }}
+  ansible.builtin.copy:
+    src: "{{ matrix_ca_cert_path }}"
+    dest: "{{ _synapse_data_dir }}/federation-ca.crt"
+    remote_src: true
+    owner: "991"
+    group: "991"
+    mode: "0640"
+  when:
+    - matrix_ca_cert_path | length > 0
+    - _matrix_ca_cert_stat.stat.exists
+  notify: Restart synapse
+
+- name: Deploy Synapse entrypoint wrapper for CA trust for {{ matrix_component }}
+  ansible.builtin.template:
+    src: synapse-entrypoint.sh.j2
+    dest: "{{ _synapse_data_dir }}/entrypoint.sh"
+    owner: "991"
+    group: "991"
+    mode: "0750"
+  when:
+    - matrix_ca_cert_path | length > 0
+    - _matrix_ca_cert_stat.stat.exists
   notify: Restart synapse
 
 - name: Deploy log configuration for {{ matrix_component }}

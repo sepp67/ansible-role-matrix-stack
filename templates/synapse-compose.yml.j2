@@ -9,27 +9,27 @@ services:
     restart: unless-stopped
     ports:
       - "{{ docker_bind_address }}:{{ _synapse_host_port }}:8008"
+{% if matrix_ca_cert_path | length > 0
+   and _matrix_ca_cert_stat is defined
+   and _matrix_ca_cert_stat.stat is defined
+   and _matrix_ca_cert_stat.stat.exists %}
+    # Entrypoint wrapper : installe la CA Caddy dans le trust store système du
+    # conteneur avant de démarrer Synapse. Requis pour les connexions OIDC
+    # (client HTTP Python/aiohttp, trust store différent de federation_custom_ca_list).
+    entrypoint: ["/bin/sh", "/data/entrypoint.sh"]
+{% endif %}
     environment:
       SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
-{% if matrix_ca_cert_path | length > 0 %}
-    # Entrypoint dédié : installe la CA Caddy interne puis délègue à /start.py.
-    # Requis en staging (tls internal). Sans cela, les connexions fédération
-    # HTTPS vers d'autres homeservers via Caddy échouent avec :
-    # "SSL certificate problem: unable to get local issuer certificate".
-    entrypoint: ["/entrypoint.sh"]
-{% endif %}
-    volumes:
-      - "{{ _synapse_data_dir }}:/data"
-{% if matrix_ca_cert_path | length > 0 %}
-      - "{{ matrix_ca_cert_path }}:/usr/local/share/ca-certificates/caddy-root.crt:ro"
-      - "./synapse-entrypoint.sh:/entrypoint.sh:ro"
-{% endif %}
 {% if matrix_extra_hosts %}
+    # Résolution DNS forcée : les domaines Matrix doivent pointer vers le proxy
+    # Caddy, pas vers les VMs Synapse elles-mêmes (fédération interne staging).
     extra_hosts:
 {% for host, ip in matrix_extra_hosts.items() %}
       - "{{ host }}:{{ ip }}"
 {% endfor %}
 {% endif %}
+    volumes:
+      - "{{ _synapse_data_dir }}:/data"
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8008/_matrix/client/versions || exit 1"]
       interval: 30s

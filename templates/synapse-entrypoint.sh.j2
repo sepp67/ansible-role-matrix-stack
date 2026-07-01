@@ -1,0 +1,12 @@
+#!/bin/sh
+# Généré par Ansible — ne pas éditer manuellement
+# Wrapper entrypoint Synapse — staging uniquement (matrix_ca_cert_path non vide)
+#
+# federation_custom_ca_list dans homeserver.yaml couvre les connexions TLS de
+# fédération (client HTTP dédié). Les connexions OIDC utilisent le trust store
+# système Python/OpenSSL du conteneur. Ce script installe la CA Caddy interne
+# dans ce store avant le démarrage de Synapse.
+set -e
+cp /data/federation-ca.crt /usr/local/share/ca-certificates/caddy-root.crt
+update-ca-certificates
+exec /start.py "$@"
