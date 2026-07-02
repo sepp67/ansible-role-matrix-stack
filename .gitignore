@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .env
 .ansible/
+
+# Tokens Application Service persistés par bridges.yml (secrets en clair)
+examples/inventories/*/generated/

@@ -4,9 +4,10 @@
 
 This role deploys a complete Matrix backend composed of:
 
-* PostgreSQL 16
+* PostgreSQL 16 (generic, multi-component database management)
 * Synapse Users
 * Synapse Bridges
+* Matrix bridges (mautrix-whatsapp, mautrix-telegram, mautrix-signal, and any future bridge described purely through variables)
 
 It is designed to be integrated into a larger infrastructure repository responsible for inventories, secrets, DNS, reverse proxy and environment-specific configuration.
 
@@ -44,18 +45,36 @@ The Matrix stack becomes an independent Ansible role that can be reused across s
         ▼                       ▼                        ▼
    Synapse Users         Synapse Bridges            Keycloak
         │                       │
+        │                       ▼
+        │              mautrix-whatsapp
+        │              mautrix-telegram
+        │              mautrix-signal
+        │                       │
         └───────────────┬───────┘
                         ▼
                    PostgreSQL 16
+             (one database per component)
 ```
 
-The recommended deployment uses three dedicated virtual machines:
+The recommended deployment uses four dedicated virtual machines:
 
-| VM                | Purpose            |
-| ----------------- | ------------------ |
-| vm-matrix-db      | PostgreSQL         |
-| vm-matrix-users   | User homeserver    |
-| vm-matrix-bridges | Bridges homeserver |
+| VM                     | Purpose                                             |
+| ---------------------- | ---------------------------------------------------- |
+| vm-matrix-postgresql   | PostgreSQL — every Matrix database (`matrix_db` group) |
+| vm-matrix-users        | User homeserver only                                |
+| vm-matrix-bridges      | Synapse Bridges + all bridge containers             |
+| vm-proxy / vm-keycloak | External infrastructure (Caddy, Keycloak) — not managed by this role |
+
+Bridges run **only** on `vm-matrix-bridges`, never on `vm-matrix-users`. Each
+bridge gets its own Docker container, its own dedicated PostgreSQL database
+and role on `vm-matrix-postgresql`, its own `config.yaml`/`registration.yaml`,
+and its own persistent directory under `/opt/matrix/bridges/<bridge_name>/`.
+No bridge ever embeds its own database, uses SQLite, or connects to
+`localhost` — every bridge connects to the central PostgreSQL VM.
+
+> Note: the inventory group backing "vm-matrix-postgresql" is named
+> `matrix_db` for backward compatibility with existing inventories — it is
+> the same central PostgreSQL VM described above.
 
 ---
 
@@ -84,12 +103,14 @@ This separation keeps the role reusable while allowing different infrastructure 
 
 ## Current
 
-* PostgreSQL 16
+* PostgreSQL 16 with generic, idempotent database/role/privilege management (`matrix_postgresql_databases`) — any future component adds one list entry, no new task file
 * Dual Synapse deployment
+* Generic Matrix bridges deployment (`matrix_bridges`) — mautrix-whatsapp, mautrix-telegram, mautrix-signal today, any future bridge by adding a variable entry
 * Docker Compose
 * Persistent volumes
 * Automatic Docker installation
 * Idempotent deployment
+* Persistent, never-regenerated Application Service tokens, stored per-environment
 * Ready for reverse proxy integration
 * Ready for OIDC integration
 * Production-oriented directory layout
@@ -98,9 +119,10 @@ This separation keeps the role reusable while allowing different infrastructure 
 
 * Keycloak integration
 * Matrix Authentication Service (MAS)
-* Mautrix WhatsApp
-* Mautrix Signal
-* Mautrix Telegram
+* Sliding Sync
+* Hookshot
+* Sygnal
+* LiveKit
 * Draupnir moderation
 * MatrixToken invitation workflow
 * Automated backup role
@@ -185,17 +207,158 @@ matrix_component:
 
 Possible values:
 
-| Value           | Deployed component |
-| --------------- | ------------------ |
-| postgres        | PostgreSQL         |
-| synapse_users   | User homeserver    |
-| synapse_bridges | Bridges homeserver |
+| Value           | Deployed component               |
+| --------------- | --------------------------------- |
+| postgres        | PostgreSQL                        |
+| synapse_users   | User homeserver                   |
+| synapse_bridges | Bridges homeserver                |
+| bridges         | Matrix bridges (VM matrix_bridges, after synapse_bridges) |
 
 Complete variable documentation is available in:
 
 ```
 defaults/main.yml
 ```
+
+---
+
+# PostgreSQL — generic database management
+
+Every PostgreSQL database used by the stack — Synapse Users, Synapse Bridges,
+each bridge, and any future component — is declared in a single generic
+variable:
+
+```yaml
+matrix_postgresql_databases:
+  - name: synapse_users
+    user: synapse_users
+    password: "{{ vault_matrix_postgres_password_users }}"
+
+  - name: synapse_bridges
+    user: synapse_bridges
+    password: "{{ vault_matrix_postgres_password_bridges }}"
+
+  - name: mautrix_whatsapp
+    user: mautrix_whatsapp
+    password: "{{ vault_matrix_bridge_whatsapp_db_password }}"
+
+  - name: mautrix_telegram
+    user: mautrix_telegram
+    password: "{{ vault_matrix_bridge_telegram_db_password }}"
+
+  - name: mautrix_signal
+    user: mautrix_signal
+    password: "{{ vault_matrix_bridge_signal_db_password }}"
+```
+
+`tasks/postgresql_databases.yml` loops over this list and, for each entry,
+idempotently ensures the role, the database (UTF8 / `C` collation, owned by
+its role) and the privileges exist, using `community.postgresql.postgresql_user`,
+`postgresql_db` and `postgresql_privs` over a local TCP connection
+(`127.0.0.1:{{ matrix_postgres_port }}`) authenticated as the `postgres`
+superuser. This task file is completely generic — it has no notion of
+"bridge" and must never be edited to add a new component.
+
+This replaces the previous `docker-entrypoint-initdb.d` SQL script, which
+only ran once at first container boot and could not create new databases on
+an already-running server. The new mechanism is idempotent and safely
+re-runnable at any time, which is what lets a new component be onboarded by
+adding one list entry — no new task, no server restart, no data loss for
+existing databases.
+
+Adding a future Matrix component that needs PostgreSQL (Sliding Sync, Matrix
+Authentication Service, Hookshot, ...) means adding one entry to
+`matrix_postgresql_databases` in the consuming inventory. Nothing in the role
+itself changes.
+
+---
+
+# Matrix bridges
+
+Bridges are deployed on `matrix_component: bridges`, targeting the
+`matrix_bridges` inventory group, **after** the `synapse_bridges` play (the
+Application Service registration files must exist before Synapse Bridges is
+restarted to load them).
+
+```yaml
+matrix_bridges_enabled: true
+
+matrix_bridges:
+  - name: whatsapp
+    image: dock.mau.dev/mautrix/whatsapp
+    tag: latest
+    container_name: mautrix-whatsapp
+    appservice_id: whatsapp
+    appservice_port: 29317
+    bot_username: whatsappbot
+    database_name: mautrix_whatsapp
+    database_user: mautrix_whatsapp
+    database_password: "{{ vault_matrix_bridge_whatsapp_db_password }}"
+    # Optional per-bridge overrides:
+    # permissions: {}      # merged over matrix_bridges_default_permissions
+    # extra_config: {}     # merged into config.yaml for bridge-specific business config
+```
+
+The role contains **no reference to any bridge by name**. `image` and `tag`
+fully describe the container; `config.yaml`, `registration.yaml` and
+`docker-compose.yml` are rendered from one shared, generic template per file
+type. Adding a new bridge (Discord, Facebook, Slack, Instagram, ...) means
+adding one entry to `matrix_bridges` (plus its database entry in
+`matrix_postgresql_databases`) — no template or task changes.
+
+## Database connection
+
+Every bridge connects to the central PostgreSQL VM, never to a local or
+embedded database:
+
+```
+postgres://<database_user>:<database_password>@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/<database_name>
+```
+
+## Permissions
+
+Restrictive by default, overridable globally or per bridge:
+
+```yaml
+matrix_bridges_default_permissions:
+  "*": ""
+  "matrix-users.local": "user"
+  "@bridge-master:matrix-bridges.local": "admin"
+```
+
+## Application Service tokens
+
+`as_token`/`hs_token` are generated once via the `ansible.builtin.password`
+lookup and persisted **on the Ansible control node**, under
+`matrix_bridge_tokens_dir` (default: `{{ inventory_dir }}/generated`) — so
+staging and production naturally get distinct tokens. They are never
+regenerated on subsequent runs. A consolidated, human-readable
+`generated/bridge_tokens.yml` is also written per environment for
+convenience; the individual per-token files remain the source of truth for
+idempotency.
+
+This directory contains secrets and must be excluded from version control
+and backed up — see `.gitignore` (`examples/inventories/*/generated/` for
+the bundled example inventories).
+
+## Registration flow
+
+Each bridge's `registration.yaml` is generated once, then copied into
+Synapse Bridges' data directory as
+`{{ matrix_base_dir }}/bridges/data/appservices/<bridge_name>-registration.yaml`.
+`homeserver.yaml` for `synapse_bridges` lists every enabled bridge under
+`app_service_config_files`. Synapse Bridges is restarted automatically only
+when a registration file actually changes.
+
+## Scope of this first sprint
+
+This first iteration focuses on plumbing, not bridge business configuration:
+PostgreSQL databases created, containers started, appservices registered in
+Synapse, bots visible and responding to `/help` in Matrix. Bridge-specific
+setup (WhatsApp QR login, Telegram `api_id`/`api_hash`, Signal linking, ...)
+is deliberately left to `matrix_bridge.extra_config` and a later sprint — the
+config template is intentionally generic and may need minor adjustment
+against the exact `example-config.yaml` shipped by each bridge image/version.
 
 ---
 
@@ -218,6 +381,47 @@ Check federation:
 ```bash
 curl https://matrix-bridges.example.com/_matrix/federation/v1/version
 ```
+
+## Bridges
+
+On `vm-matrix-postgresql`, confirm every database was created:
+
+```bash
+sudo docker exec -it matrix-postgres \
+  psql -U postgres \
+  -c "\l"
+```
+
+Expected: `synapse_users`, `synapse_bridges`, `mautrix_whatsapp`,
+`mautrix_telegram`, `mautrix_signal`.
+
+On `vm-matrix-bridges`, confirm the containers are running:
+
+```bash
+sudo docker ps | grep mautrix
+```
+
+Confirm Synapse Bridges loaded the appservices:
+
+```bash
+sudo grep -n "app_service_config_files" -A10 \
+  /opt/matrix/bridges/data/homeserver.yaml
+```
+
+Check the bridge and Synapse Bridges logs:
+
+```bash
+sudo docker logs synapse-bridges --tail=100
+sudo docker logs mautrix-whatsapp --tail=100
+sudo docker logs mautrix-telegram --tail=100
+sudo docker logs mautrix-signal --tail=100
+```
+
+From Element, as a user allowed by `matrix_bridges_default_permissions`:
+
+* Search `@whatsappbot:matrix-bridges.local`, `@telegrambot:matrix-bridges.local`, `@signalbot:matrix-bridges.local`
+* Open a DM with each bot
+* Send `/help` and confirm each bot responds
 
 ---
 
@@ -288,19 +492,23 @@ This design keeps the role portable and reusable.
 
 ## Current milestone
 
-* [x] PostgreSQL
+* [x] PostgreSQL (generic, idempotent database management)
 * [x] Synapse Users
 * [x] Synapse Bridges
 * [x] Docker Compose deployment
+* [x] Generic Matrix bridges deployment
+* [x] Mautrix WhatsApp
+* [x] Mautrix Telegram
+* [x] Mautrix Signal
 
 ## Next milestone
 
+* [ ] Bridge business configuration (WhatsApp login, Telegram API credentials, Signal linking)
 * [ ] Keycloak OIDC
 * [ ] Matrix Authentication Service
 * [ ] Existing LDAP migration
-* [ ] Mautrix WhatsApp
-* [ ] Mautrix Signal
-* [ ] Mautrix Telegram
+* [ ] Sliding Sync
+* [ ] Hookshot
 * [ ] Draupnir
 * [ ] MatrixToken integration
 

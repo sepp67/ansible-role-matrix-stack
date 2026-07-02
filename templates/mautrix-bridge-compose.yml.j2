@@ -1,0 +1,13 @@
+---
+# Généré par Ansible — ne pas éditer manuellement
+# Bridge : {{ matrix_bridge.container_name }} | Env : {{ environment_name }}
+
+services:
+  {{ matrix_bridge.container_name }}:
+    image: "{{ matrix_bridge.image }}:{{ matrix_bridge.tag }}"
+    container_name: "{{ matrix_bridge.container_name }}"
+    restart: unless-stopped
+    ports:
+      - "{{ docker_bind_address }}:{{ matrix_bridge.appservice_port }}:{{ matrix_bridge.appservice_port }}"
+    volumes:
+      - "{{ _bridge_data_dir }}:/data"

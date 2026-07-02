@@ -98,3 +98,52 @@ matrix_synapse_ip_range_whitelist: []
 # Laisser à "" pour désactiver le montage (production ACME, Let's Encrypt est
 # déjà reconnu sans action supplémentaire).
 matrix_ca_cert_path: ""
+
+# ── PostgreSQL — bases génériques ────────────────────────────────────────────
+# Liste générique des bases PostgreSQL à créer/maintenir sur la VM PostgreSQL
+# centrale (matrix_component == 'postgres'). Chaque entrée : name / user / password.
+#
+# Le rôle ne connaît ici aucun composant par son nom : Synapse Users, Synapse
+# Bridges, chaque bridge Mautrix, et tout futur composant Matrix nécessitant
+# PostgreSQL (Sliding Sync, Matrix Authentication Service, Hookshot, ...)
+# doivent ajouter leur propre entrée depuis l'inventaire consommateur.
+# Voir examples/inventories/*/group_vars/all/main.yml pour un exemple complet
+# et tasks/postgresql_databases.yml pour la logique de création (idempotente,
+# rejouable à tout moment — contrairement à l'ancien mécanisme
+# docker-entrypoint-initdb.d qui ne s'exécutait qu'au premier démarrage).
+matrix_postgresql_databases: []
+
+# ── Bridges Matrix ────────────────────────────────────────────────────────────
+# Active le déploiement des bridges (matrix_component == 'bridges', VM
+# matrix_bridges uniquement, après Synapse Bridges). Chaque bridge doit avoir
+# sa base PostgreSQL déjà déclarée dans matrix_postgresql_databases — ce rôle
+# ne la crée pas automatiquement pour garder la gestion PostgreSQL générique.
+matrix_bridges_enabled: false
+
+# Liste des bridges à déployer. Chaque entrée décrit entièrement son image
+# Docker et son appservice — le rôle ne contient aucune référence codée en dur
+# à un bridge particulier (WhatsApp, Telegram, Signal, ...). Ajouter un bridge
+# consiste à ajouter une entrée ici et l'entrée PostgreSQL correspondante.
+# Voir README.md pour le schéma complet et un exemple.
+matrix_bridges: []
+
+# Permissions par défaut appliquées à tous les bridges, fusionnées avec les
+# permissions spécifiques éventuelles de chaque entrée de matrix_bridges (clé
+# "permissions"). Restrictif par défaut : aucun accès accordé.
+matrix_bridges_default_permissions:
+  "*": ""
+
+# Répertoire racine des bridges sur la VM matrix_bridges. Chaque bridge obtient
+# un sous-répertoire {{ matrix_bridges_base_dir }}/<name>/.
+matrix_bridges_base_dir: "{{ matrix_base_dir }}/bridges"
+
+# URL interne bridge → Synapse Bridges — les deux tournent sur la même VM.
+matrix_bridges_internal_url: "http://127.0.0.1:{{ matrix_bridges_http_port }}"
+
+# Répertoire de persistance des tokens Application Service, sur le poste de
+# contrôle Ansible (pas sur les VMs cibles). Par défaut le dossier "generated/"
+# de l'inventaire courant — donc naturellement distinct entre staging et
+# production. Les tokens sont générés une seule fois (lookup password) et ne
+# doivent jamais être supprimés : leur perte désynchronise Synapse et le
+# bridge. Ce dossier doit être exclu du contrôle de version et sauvegardé.
+matrix_bridge_tokens_dir: "{{ inventory_dir }}/generated"

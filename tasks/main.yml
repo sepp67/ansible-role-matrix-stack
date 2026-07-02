@@ -3,9 +3,10 @@
 # ansible-role-matrix-stack — Point d'entrée
 #
 # La variable matrix_component contrôle ce qui est déployé sur l'hôte courant :
-#   postgres        → PostgreSQL partagé (deux bases, deux users)
+#   postgres        → PostgreSQL partagé (bases génériques, voir matrix_postgresql_databases)
 #   synapse_users   → Synapse homeserver dédié aux utilisateurs
-#   synapse_bridges → Synapse homeserver dédié aux bridges Mautrix
+#   synapse_bridges → Synapse homeserver dédié aux bridges
+#   bridges         → Bridges Matrix (mautrix-whatsapp, mautrix-telegram, ...), VM matrix_bridges
 #
 # Chaque composant est invoqué dans un play distinct du playbook, ciblant
 # le groupe d'inventaire correspondant. Voir examples/deploy-matrix-stack.yml.
@@ -25,3 +26,8 @@
   ansible.builtin.include_tasks:
     file: synapse.yml
   when: matrix_component in ['synapse_users', 'synapse_bridges']
+
+- name: Deploy Matrix bridges
+  ansible.builtin.include_tasks:
+    file: bridges.yml
+  when: matrix_component == 'bridges'

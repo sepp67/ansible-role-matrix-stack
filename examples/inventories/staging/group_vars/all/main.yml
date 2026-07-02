@@ -49,3 +49,72 @@ matrix_users_form_secret: "{{ vault_matrix_users_form_secret }}"
 matrix_bridges_registration_shared_secret: "{{ vault_matrix_bridges_registration_shared_secret }}"
 matrix_bridges_macaroon_secret_key: "{{ vault_matrix_bridges_macaroon_secret_key }}"
 matrix_bridges_form_secret: "{{ vault_matrix_bridges_form_secret }}"
+
+# ── PostgreSQL — bases génériques ────────────────────────────────────────────
+# Toutes les bases PostgreSQL de la stack, y compris les bridges. Le rôle ne
+# connaît aucune de ces bases par son nom : ajouter un composant Matrix qui a
+# besoin de PostgreSQL consiste à ajouter une entrée ici.
+matrix_postgresql_databases:
+  - name: synapse_users
+    user: synapse_users
+    password: "{{ matrix_postgres_password_users }}"
+
+  - name: synapse_bridges
+    user: synapse_bridges
+    password: "{{ matrix_postgres_password_bridges }}"
+
+  - name: mautrix_whatsapp
+    user: mautrix_whatsapp
+    password: "{{ vault_matrix_bridge_whatsapp_db_password }}"
+
+  - name: mautrix_telegram
+    user: mautrix_telegram
+    password: "{{ vault_matrix_bridge_telegram_db_password }}"
+
+  - name: mautrix_signal
+    user: mautrix_signal
+    password: "{{ vault_matrix_bridge_signal_db_password }}"
+
+# ── Bridges Matrix ────────────────────────────────────────────────────────────
+matrix_bridges_enabled: true
+
+# Permissions restrictives par défaut : seuls les comptes matrix-users.local
+# et le compte admin désigné peuvent utiliser les bridges.
+matrix_bridges_default_permissions:
+  "*": ""
+  "matrix-users.staging.local": "user"
+  "@bridge-master:matrix-bridges.staging.local": "admin"
+
+matrix_bridges:
+  - name: whatsapp
+    image: dock.mau.dev/mautrix/whatsapp
+    tag: latest
+    container_name: mautrix-whatsapp
+    appservice_id: whatsapp
+    appservice_port: 29317
+    bot_username: whatsappbot
+    database_name: mautrix_whatsapp
+    database_user: mautrix_whatsapp
+    database_password: "{{ vault_matrix_bridge_whatsapp_db_password }}"
+
+  - name: telegram
+    image: dock.mau.dev/mautrix/telegram
+    tag: latest
+    container_name: mautrix-telegram
+    appservice_id: telegram
+    appservice_port: 29318
+    bot_username: telegrambot
+    database_name: mautrix_telegram
+    database_user: mautrix_telegram
+    database_password: "{{ vault_matrix_bridge_telegram_db_password }}"
+
+  - name: signal
+    image: dock.mau.dev/mautrix/signal
+    tag: latest
+    container_name: mautrix-signal
+    appservice_id: signal
+    appservice_port: 29319
+    bot_username: signalbot
+    database_name: mautrix_signal
+    database_user: mautrix_signal
+    database_password: "{{ vault_matrix_bridge_signal_db_password }}"

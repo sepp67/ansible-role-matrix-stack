@@ -1,0 +1,62 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# bridges.yml — Déploie les bridges Matrix (matrix_component == 'bridges')
+#
+# Générique : ne connaît aucun bridge par son nom. Chaque entrée de
+# matrix_bridges décrit entièrement son image Docker, son appservice et sa
+# base PostgreSQL dédiée (déjà créée par postgresql_databases.yml sur la VM
+# PostgreSQL centrale — voir matrix_postgresql_databases).
+#
+# Les tokens d'application service sont générés une seule fois et persistés
+# sur le poste de contrôle Ansible sous matrix_bridge_tokens_dir (par défaut
+# le dossier "generated/" de l'inventaire courant — donc distinct entre
+# staging et production).
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Create bridges base directory
+  ansible.builtin.file:
+    path: "{{ matrix_bridges_base_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0750"
+  when: matrix_bridges_enabled | bool
+
+- name: Create appservices directory in Synapse Bridges data dir
+  ansible.builtin.file:
+    path: "{{ matrix_base_dir }}/bridges/data/appservices"
+    state: directory
+    owner: "991"
+    group: "991"
+    mode: "0750"
+  when: matrix_bridges_enabled | bool
+
+- name: Ensure bridge tokens directory exists on the Ansible controller
+  ansible.builtin.file:
+    path: "{{ matrix_bridge_tokens_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  when: matrix_bridges_enabled | bool
+
+- name: Deploy each Matrix bridge
+  ansible.builtin.include_tasks:
+    file: bridge_instance.yml
+  loop: "{{ matrix_bridges }}"
+  loop_control:
+    loop_var: matrix_bridge
+    label: "{{ matrix_bridge.name }}"
+  when: matrix_bridges_enabled | bool
+
+- name: Write consolidated appservice token registry for {{ environment_name }}
+  ansible.builtin.template:
+    src: bridge-tokens.yml.j2
+    dest: "{{ matrix_bridge_tokens_dir }}/bridge_tokens.yml"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when:
+    - matrix_bridges_enabled | bool
+    - matrix_bridges | length > 0

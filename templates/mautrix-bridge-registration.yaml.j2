@@ -1,0 +1,16 @@
+# Généré par Ansible — ne pas éditer manuellement
+# Registration Application Service : {{ matrix_bridge.name }} | Env : {{ environment_name }}
+
+id: {{ matrix_bridge.appservice_id }}
+as_token: "{{ _bridge_as_token }}"
+hs_token: "{{ _bridge_hs_token }}"
+namespaces:
+    users:
+        - regex: '@{{ matrix_bridge.bot_username }}:{{ matrix_bridges_server_name | regex_escape }}'
+          exclusive: true
+        - regex: '@{{ matrix_bridge.appservice_id }}_.*:{{ matrix_bridges_server_name | regex_escape }}'
+          exclusive: true
+    aliases: []
+url: {{ _bridge_url }}
+sender_localpart: {{ matrix_bridge.appservice_id }}bot
+rate_limited: false

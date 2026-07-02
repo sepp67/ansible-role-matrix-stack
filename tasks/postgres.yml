@@ -2,9 +2,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # postgres.yml — Déploie PostgreSQL dédié à la stack Matrix
 #
-# Crée deux bases (synapse_users, synapse_bridges) et deux utilisateurs
-# distincts via un script SQL monté dans /docker-entrypoint-initdb.d/.
-# Ce script n'est exécuté qu'une seule fois (premier démarrage) — idempotent.
+# Démarre le conteneur matrix-postgres (superutilisateur uniquement), puis
+# délègue la création des bases/utilisateurs/droits applicatifs à
+# postgresql_databases.yml, générique et idempotent (voir ce fichier).
 # ─────────────────────────────────────────────────────────────────────────────
 
 - name: Create PostgreSQL compose directory
@@ -22,23 +22,6 @@
     owner: root
     group: root
     mode: "0755"
-
-- name: Create PostgreSQL init directory
-  ansible.builtin.file:
-    path: "{{ matrix_base_dir }}/postgres/init"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Deploy PostgreSQL init SQL script
-  ansible.builtin.template:
-    src: init-matrix-db.sql.j2
-    dest: "{{ matrix_base_dir }}/postgres/init/01-init-matrix.sql"
-    owner: root
-    group: root
-    mode: "0644"
-  no_log: true
 
 - name: Deploy docker-compose.yml for matrix-postgres
   ansible.builtin.template:
@@ -73,3 +56,8 @@
     port: "{{ matrix_postgres_port }}"
     delay: 5
     timeout: 60
+
+- name: Manage PostgreSQL databases for Matrix components
+  ansible.builtin.include_tasks:
+    file: postgresql_databases.yml
+  when: matrix_postgresql_databases | length > 0

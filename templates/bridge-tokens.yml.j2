@@ -1,0 +1,15 @@
+# Généré par Ansible — ne pas éditer manuellement
+# Registre consolidé des tokens Application Service — environnement {{ environment_name }}
+#
+# Vue de confort uniquement : la source de vérité pour l'idempotence reste les
+# fichiers individuels {{ matrix_bridge_tokens_dir }}/<bridge>-as-token.txt et
+# <bridge>-hs-token.txt (générés une seule fois via le lookup ansible.builtin.password
+# et jamais régénérés). Ne jamais éditer ces fichiers à la main : un changement de
+# token désynchronise Synapse et le bridge tant que les deux ne sont pas mis à jour
+# ensemble.
+
+{% for name, tokens in _matrix_bridge_tokens_registry.items() %}
+{{ name }}:
+    as_token: "{{ tokens.as_token }}"
+    hs_token: "{{ tokens.hs_token }}"
+{% endfor %}

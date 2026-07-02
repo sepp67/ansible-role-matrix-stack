@@ -1,0 +1,72 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# postgresql_databases.yml — Gestion générique des bases PostgreSQL Matrix
+#
+# Parcourt matrix_postgresql_databases et crée/maintient un rôle + une base +
+# les droits pour chaque entrée. Entièrement générique et indépendant de la
+# notion de bridge : ce fichier ne doit jamais être modifié pour ajouter un
+# nouveau composant Matrix (bridge, Sliding Sync, Matrix Authentication
+# Service, Hookshot, ...) — il suffit d'ajouter une entrée à la variable.
+#
+# Idempotent et rejouable à tout moment, contrairement à l'ancien mécanisme
+# docker-entrypoint-initdb.d qui ne s'exécutait qu'au premier démarrage du
+# conteneur matrix-postgres et ne pouvait donc pas créer de nouvelles bases
+# sur un serveur déjà initialisé.
+#
+# Exécuté sur la VM PostgreSQL centrale (matrix_component == 'postgres'),
+# en connexion TCP locale (127.0.0.1) authentifiée avec le superutilisateur
+# postgres.
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Install PostgreSQL Python driver required by community.postgresql
+  ansible.builtin.apt:
+    name: python3-psycopg2
+    state: present
+
+- name: Ensure PostgreSQL roles exist for Matrix components
+  community.postgresql.postgresql_user:
+    login_host: 127.0.0.1
+    login_port: "{{ matrix_postgres_port }}"
+    login_user: postgres
+    login_password: "{{ matrix_postgres_superuser_password }}"
+    name: "{{ item.user }}"
+    password: "{{ item.password }}"
+    state: present
+  loop: "{{ matrix_postgresql_databases }}"
+  loop_control:
+    label: "{{ item.user }}"
+  no_log: true
+
+- name: Ensure PostgreSQL databases exist for Matrix components
+  community.postgresql.postgresql_db:
+    login_host: 127.0.0.1
+    login_port: "{{ matrix_postgres_port }}"
+    login_user: postgres
+    login_password: "{{ matrix_postgres_superuser_password }}"
+    name: "{{ item.name }}"
+    owner: "{{ item.user }}"
+    encoding: UTF8
+    lc_collate: C
+    lc_ctype: C
+    template: template0
+    state: present
+  loop: "{{ matrix_postgresql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Ensure PostgreSQL privileges are granted for Matrix components
+  community.postgresql.postgresql_privs:
+    login_host: 127.0.0.1
+    login_port: "{{ matrix_postgres_port }}"
+    login_user: postgres
+    login_password: "{{ matrix_postgres_superuser_password }}"
+    database: "{{ item.name }}"
+    type: database
+    roles: "{{ item.user }}"
+    privs: ALL
+    state: present
+  loop: "{{ matrix_postgresql_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true

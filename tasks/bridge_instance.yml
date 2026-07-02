@@ -1,0 +1,111 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# bridge_instance.yml — Déploie un bridge Matrix unique
+#
+# Appelé en boucle par bridges.yml avec matrix_bridge = un élément de
+# matrix_bridges. Ne contient aucune logique spécifique à un bridge
+# particulier : toute la configuration provient des clés de matrix_bridge
+# (image, tag, appservice, base de données).
+#
+# Les redémarrages sont déclenchés via notify + meta: flush_handlers en fin
+# de fichier, plutôt qu'un flush unique en fin de play : _bridge_dir change à
+# chaque itération de la boucle, donc les handlers doivent être vidangés
+# avant que l'itération suivante n'écrase ce fait.
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Set computed variables for bridge {{ matrix_bridge.name }}
+  ansible.builtin.set_fact:
+    _bridge_dir: "{{ matrix_bridges_base_dir }}/{{ matrix_bridge.name }}"
+    _bridge_data_dir: "{{ matrix_bridges_base_dir }}/{{ matrix_bridge.name }}/data"
+    _bridge_url: "http://127.0.0.1:{{ matrix_bridge.appservice_port }}"
+    _bridge_permissions: "{{ matrix_bridges_default_permissions | combine(matrix_bridge.permissions | default({})) }}"
+
+- name: Generate or load persistent appservice tokens for {{ matrix_bridge.name }}
+  ansible.builtin.set_fact:
+    _bridge_as_token: >-
+      {{ lookup('ansible.builtin.password', matrix_bridge_tokens_dir ~ '/' ~ matrix_bridge.name ~ '-as-token.txt',
+         chars=['hexdigits'], length=64) }}
+    _bridge_hs_token: >-
+      {{ lookup('ansible.builtin.password', matrix_bridge_tokens_dir ~ '/' ~ matrix_bridge.name ~ '-hs-token.txt',
+         chars=['hexdigits'], length=64) }}
+  no_log: true
+
+- name: Accumulate token registry entry for {{ matrix_bridge.name }}
+  ansible.builtin.set_fact:
+    _matrix_bridge_tokens_registry: >-
+      {{ (_matrix_bridge_tokens_registry | default({}))
+         | combine({matrix_bridge.name: {'as_token': _bridge_as_token, 'hs_token': _bridge_hs_token}}) }}
+  no_log: true
+
+- name: Create directory for bridge {{ matrix_bridge.name }}
+  ansible.builtin.file:
+    path: "{{ _bridge_dir }}"
+    state: directory
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0750"
+
+- name: Create data directory for bridge {{ matrix_bridge.name }}
+  ansible.builtin.file:
+    path: "{{ _bridge_data_dir }}"
+    state: directory
+    owner: "1337"
+    group: "1337"
+    mode: "0750"
+
+- name: Deploy config.yaml for bridge {{ matrix_bridge.name }}
+  ansible.builtin.template:
+    src: mautrix-bridge-config.yaml.j2
+    dest: "{{ _bridge_data_dir }}/config.yaml"
+    owner: "1337"
+    group: "1337"
+    mode: "0640"
+  no_log: true
+  notify: Restart bridge
+
+- name: Deploy registration.yaml for bridge {{ matrix_bridge.name }}
+  ansible.builtin.template:
+    src: mautrix-bridge-registration.yaml.j2
+    dest: "{{ _bridge_dir }}/registration.yaml"
+    owner: "1337"
+    group: "1337"
+    mode: "0640"
+  no_log: true
+  notify: Restart bridge
+
+- name: Publish registration.yaml into Synapse Bridges appservices directory for {{ matrix_bridge.name }}
+  ansible.builtin.copy:
+    src: "{{ _bridge_dir }}/registration.yaml"
+    dest: "{{ matrix_base_dir }}/bridges/data/appservices/{{ matrix_bridge.name }}-registration.yaml"
+    remote_src: true
+    owner: "991"
+    group: "991"
+    mode: "0640"
+  notify: Restart Synapse Bridges after registration change
+
+- name: Deploy docker-compose.yml for bridge {{ matrix_bridge.name }}
+  ansible.builtin.template:
+    src: mautrix-bridge-compose.yml.j2
+    dest: "{{ _bridge_dir }}/docker-compose.yml"
+    owner: "{{ deploy_user }}"
+    group: "{{ deploy_user }}"
+    mode: "0640"
+
+- name: Pull and start bridge {{ matrix_bridge.name }}
+  community.docker.docker_compose_v2:
+    project_src: "{{ _bridge_dir }}"
+    pull: always
+    state: present
+  become: true
+  become_user: "{{ deploy_user }}"
+
+- name: Flush handlers for bridge {{ matrix_bridge.name }}
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait until bridge container is running for {{ matrix_bridge.name }}
+  community.docker.docker_container_info:
+    name: "{{ matrix_bridge.container_name }}"
+  register: _bridge_container_info
+  until: _bridge_container_info.container.State.Running
+  retries: "{{ matrix_healthcheck_retries }}"
+  delay: "{{ matrix_healthcheck_delay }}"

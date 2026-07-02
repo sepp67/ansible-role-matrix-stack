@@ -74,6 +74,16 @@ serve_server_wellknown: true
 trusted_key_servers:
   - server_name: "matrix.org"
 
+# ── Application Services (bridges) ──────────────────────────────────────────
+{% if matrix_component == 'synapse_bridges' and matrix_bridges_enabled and matrix_bridges %}
+# Un fichier de registration par bridge actif, déposé par bridges.yml dans
+# {{ matrix_base_dir }}/bridges/data/appservices/ (monté ici sur /data/appservices).
+app_service_config_files:
+{% for matrix_bridge in matrix_bridges %}
+  - /data/appservices/{{ matrix_bridge.name }}-registration.yaml
+{% endfor %}
+{% endif %}
+
 # ── OIDC / Keycloak ───────────────────────────────────────────────────────────
 # Désactivé par défaut. Pour activer, définir matrix_oidc_enabled: true
 # et renseigner matrix_oidc_issuer, matrix_oidc_client_id ainsi que

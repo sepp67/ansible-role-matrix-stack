@@ -1,0 +1,43 @@
+# Généré par Ansible — ne pas éditer manuellement
+# Bridge : {{ matrix_bridge.name }} | Homeserver : {{ matrix_bridges_server_name }} | Env : {{ environment_name }}
+#
+# Structure commune aux bridges Mautrix (appservice/homeserver/database/permissions).
+# Le schéma exact peut varier selon le bridge et sa version — vérifier le
+# example-config.yaml de l'image utilisée. Les champs spécifiques à un bridge
+# (identifiants API, sockets, ...) se renseignent via matrix_bridge.extra_config,
+# fusionné en fin de fichier — ce template ne code en dur aucun bridge particulier.
+
+homeserver:
+    address: {{ matrix_bridges_internal_url }}
+    domain: {{ matrix_bridges_server_name }}
+
+appservice:
+    address: {{ _bridge_url }}
+    hostname: 0.0.0.0
+    port: {{ matrix_bridge.appservice_port }}
+    id: {{ matrix_bridge.appservice_id }}
+    bot_username: {{ matrix_bridge.bot_username }}
+    bot_displayname: "{{ matrix_bridge.bot_username }}"
+    as_token: "{{ _bridge_as_token }}"
+    hs_token: "{{ _bridge_hs_token }}"
+
+database:
+    type: postgres
+    uri: postgres://{{ matrix_bridge.database_user }}:{{ matrix_bridge.database_password }}@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/{{ matrix_bridge.database_name }}
+
+bridge:
+    permissions:
+{% for entry, level in _bridge_permissions.items() %}
+        "{{ entry }}": {{ level }}
+{% endfor %}
+
+logging:
+    min_level: info
+    writers:
+        - type: stdout
+          format: pretty-colored
+{% if matrix_bridge.extra_config is defined and matrix_bridge.extra_config %}
+
+# ── Configuration spécifique au bridge (matrix_bridge.extra_config) ────────────
+{{ matrix_bridge.extra_config | to_nice_yaml(indent=4) }}
+{% endif %}

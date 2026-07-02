@@ -28,3 +28,8 @@ vault_matrix_users_form_secret: "CHANGE_ME_very_long_random_secret"
 vault_matrix_bridges_registration_shared_secret: "CHANGE_ME_very_long_random_secret"
 vault_matrix_bridges_macaroon_secret_key: "CHANGE_ME_very_long_random_secret"
 vault_matrix_bridges_form_secret: "CHANGE_ME_very_long_random_secret"
+
+# Mots de passe PostgreSQL des bridges Mautrix (bases dédiées sur matrix-postgres)
+vault_matrix_bridge_whatsapp_db_password: "CHANGE_ME_strong_password_here"
+vault_matrix_bridge_telegram_db_password: "CHANGE_ME_strong_password_here"
+vault_matrix_bridge_signal_db_password: "CHANGE_ME_strong_password_here"
