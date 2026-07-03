@@ -114,6 +114,13 @@ matrix_bridges:
     database_name: mautrix_telegram
     database_user: mautrix_telegram
     database_password: "{{ vault_matrix_bridge_telegram_db_password }}"
+    # api_id/api_hash sont obligatoires pour mautrix-telegram (my.telegram.org).
+    # Merged tel quel dans config.yaml via matrix_bridge.extra_config — WhatsApp
+    # et Signal n'ont pas cette clé, donc ils ne sont pas impactés.
+    extra_config:
+      telegram:
+        api_id: "{{ vault_matrix_telegram_api_id }}"
+        api_hash: "{{ vault_matrix_telegram_api_hash }}"
 
   - name: signal
     image: dock.mau.dev/mautrix/signal

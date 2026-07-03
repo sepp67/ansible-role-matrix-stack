@@ -23,7 +23,7 @@ appservice:
 
 database:
     type: postgres
-    uri: postgres://{{ matrix_bridge.database_user }}:{{ matrix_bridge.database_password }}@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/{{ matrix_bridge.database_name }}
+    uri: postgres://{{ matrix_bridge.database_user }}:{{ matrix_bridge.database_password }}@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/{{ matrix_bridge.database_name }}?sslmode={{ matrix_bridges_postgres_sslmode }}
 
 bridge:
     permissions:

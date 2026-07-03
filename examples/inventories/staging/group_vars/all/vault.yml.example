@@ -33,3 +33,8 @@ vault_matrix_bridges_form_secret: "CHANGE_ME_very_long_random_secret"
 vault_matrix_bridge_whatsapp_db_password: "CHANGE_ME_strong_password_here"
 vault_matrix_bridge_telegram_db_password: "CHANGE_ME_strong_password_here"
 vault_matrix_bridge_signal_db_password: "CHANGE_ME_strong_password_here"
+
+# Identifiants API Telegram pour mautrix-telegram (obligatoires), à obtenir
+# sur https://my.telegram.org/apps
+vault_matrix_telegram_api_id: "CHANGE_ME_telegram_api_id"
+vault_matrix_telegram_api_hash: "CHANGE_ME_telegram_api_hash"

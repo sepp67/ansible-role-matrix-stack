@@ -41,6 +41,14 @@ matrix_postgres_port: 5432
 matrix_postgres_cp_min: 5
 matrix_postgres_cp_max: 10
 
+# Mode SSL utilisé dans l'URI PostgreSQL des bridges Mautrix (database.uri du
+# config.yaml, voir templates/mautrix-bridge-config.yaml.j2). Notre VM
+# PostgreSQL centrale n'active pas SSL — "disable" par défaut. Générique :
+# s'applique à tous les bridges actuels et futurs via le template, sans
+# modification manuelle par bridge. Passer à "require" (ou autre) ici si SSL
+# est un jour activé côté serveur.
+matrix_bridges_postgres_sslmode: "disable"
+
 # ── Synapse Users ─────────────────────────────────────────────────────────────
 matrix_users_server_name: "matrix-users.example.com"
 matrix_users_public_baseurl: "https://matrix-users.example.com/"

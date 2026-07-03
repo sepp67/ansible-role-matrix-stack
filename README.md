@@ -303,6 +303,24 @@ matrix_bridges:
     # Optional per-bridge overrides:
     # permissions: {}      # merged over matrix_bridges_default_permissions
     # extra_config: {}     # merged into config.yaml for bridge-specific business config
+
+  - name: telegram
+    image: dock.mau.dev/mautrix/telegram
+    tag: latest
+    container_name: mautrix-telegram
+    appservice_id: telegram
+    appservice_port: 29318
+    bot_username: telegrambot
+    database_name: mautrix_telegram
+    database_user: mautrix_telegram
+    database_password: "{{ vault_matrix_bridge_telegram_db_password }}"
+    # mautrix-telegram requires api_id/api_hash (https://my.telegram.org/apps).
+    # extra_config is merged as-is at the root of config.yaml — only the
+    # telegram entry sets this key, so whatsapp/signal are never impacted.
+    extra_config:
+      telegram:
+        api_id: "{{ vault_matrix_telegram_api_id }}"
+        api_hash: "{{ vault_matrix_telegram_api_hash }}"
 ```
 
 The role contains **no reference to any bridge by name**. `image` and `tag`
@@ -336,8 +354,14 @@ Every bridge connects to the central PostgreSQL VM, never to a local or
 embedded database:
 
 ```
-postgres://<database_user>:<database_password>@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/<database_name>
+postgres://<database_user>:<database_password>@{{ matrix_postgres_host }}:{{ matrix_postgres_port }}/<database_name>?sslmode={{ matrix_bridges_postgres_sslmode }}
 ```
+
+`matrix_bridges_postgres_sslmode` defaults to `disable` (our central
+PostgreSQL VM does not run SSL). It lives once in `defaults/main.yml` and is
+applied by the shared `config.yaml` template to every bridge, current and
+future — never set per bridge. Override it in the inventory if the
+PostgreSQL VM starts requiring SSL.
 
 ## Permissions
 
@@ -389,10 +413,13 @@ the bridge itself — so Synapse Bridges has already reloaded the new
 This first iteration focuses on plumbing, not bridge business configuration:
 PostgreSQL databases created, containers started, appservices registered in
 Synapse, bots visible and responding to `/help` in Matrix. Bridge-specific
-setup (WhatsApp QR login, Telegram `api_id`/`api_hash`, Signal linking, ...)
-is deliberately left to `matrix_bridge.extra_config` and a later sprint — the
-config template is intentionally generic and may need minor adjustment
-against the exact `example-config.yaml` shipped by each bridge image/version.
+setup (WhatsApp QR login, Signal linking, ...) is deliberately left to
+`matrix_bridge.extra_config` and a later sprint — the config template is
+intentionally generic and may need minor adjustment against the exact
+`example-config.yaml` shipped by each bridge image/version. Telegram's
+mandatory `api_id`/`api_hash` are the one exception already wired through
+`matrix_bridge.extra_config` (see the `telegram` entry above) since the
+bridge won't start without them.
 
 ---
 
