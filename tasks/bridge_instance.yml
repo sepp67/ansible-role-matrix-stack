@@ -17,7 +17,7 @@
   ansible.builtin.set_fact:
     _bridge_dir: "{{ matrix_bridges_base_dir }}/{{ matrix_bridge.name }}"
     _bridge_data_dir: "{{ matrix_bridges_base_dir }}/{{ matrix_bridge.name }}/data"
-    _bridge_url: "http://127.0.0.1:{{ matrix_bridge.appservice_port }}"
+    _bridge_url: "{{ matrix_appservice_base_url }}:{{ matrix_bridge.appservice_port }}"
     _bridge_permissions: "{{ matrix_bridges_default_permissions | combine(matrix_bridge.permissions | default({})) }}"
 
 - name: Generate or load persistent appservice tokens for {{ matrix_bridge.name }}
@@ -71,6 +71,21 @@
     group: "1337"
     mode: "0640"
   no_log: true
+  notify: Restart bridge
+
+# _bridge_dir/registration.yaml est la seule copie rendue depuis le template
+# (source de vérité). Les deux copies ci-dessous (data dir du bridge,
+# appservices de Synapse Bridges) sont des copies remote_src de ce même
+# fichier, afin que les trois emplacements contiennent exactement les mêmes
+# as_token/hs_token — un seul registration logique par bridge.
+- name: Copy registration.yaml into data directory for {{ matrix_bridge.name }}
+  ansible.builtin.copy:
+    src: "{{ _bridge_dir }}/registration.yaml"
+    dest: "{{ _bridge_data_dir }}/registration.yaml"
+    remote_src: true
+    owner: "1337"
+    group: "1337"
+    mode: "0640"
   notify: Restart bridge
 
 - name: Publish registration.yaml into Synapse Bridges appservices directory for {{ matrix_bridge.name }}

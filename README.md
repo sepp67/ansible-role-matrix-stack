@@ -283,6 +283,12 @@ restarted to load them).
 ```yaml
 matrix_bridges_enabled: true
 
+# Reachable IP (or hostname) of the matrix_bridges VM. Never 127.0.0.1:
+# Synapse Bridges and every bridge run in separate docker-compose projects
+# (separate container networks) even though they share the same VM. Single
+# source of truth for both directions of traffic between them — see below.
+matrix_bridges_vm_ip: "192.168.1.77"
+
 matrix_bridges:
   - name: whatsapp
     image: dock.mau.dev/mautrix/whatsapp
@@ -305,6 +311,24 @@ fully describe the container; `config.yaml`, `registration.yaml` and
 type. Adding a new bridge (Discord, Facebook, Slack, Instagram, ...) means
 adding one entry to `matrix_bridges` (plus its database entry in
 `matrix_postgresql_databases`) — no template or task changes.
+
+## Network topology
+
+Synapse Bridges and every bridge run on the same VM (`matrix_bridges` group)
+but in **separate docker-compose projects**, so `127.0.0.1` inside one
+container never reaches another. Traffic between them flows in both
+directions, each with its own dedicated URL derived from the single
+`matrix_bridges_vm_ip`:
+
+- **Bridge → Synapse** (`matrix_synapse_internal_url`, used as
+  `homeserver.address` in each bridge's `config.yaml`):
+  `http://{{ matrix_bridges_vm_ip }}:{{ matrix_bridges_http_port }}`.
+- **Synapse → bridge** (`matrix_appservice_base_url`, used as `url` in
+  `registration.yaml` and `appservice.address` in `config.yaml`):
+  `http://{{ matrix_bridges_vm_ip }}` — each bridge's own
+  `appservice_port` is appended to it. The port is published on the VM's
+  network interface by `docker-compose` (`mautrix-bridge-compose.yml.j2`),
+  which is what makes it reachable from the Synapse Bridges container.
 
 ## Database connection
 
@@ -343,12 +367,22 @@ the bundled example inventories).
 
 ## Registration flow
 
-Each bridge's `registration.yaml` is generated once, then copied into
-Synapse Bridges' data directory as
-`{{ matrix_base_dir }}/bridges/data/appservices/<bridge_name>-registration.yaml`.
-`homeserver.yaml` for `synapse_bridges` lists every enabled bridge under
-`app_service_config_files`. Synapse Bridges is restarted automatically only
-when a registration file actually changes.
+Each bridge has a single logical `registration.yaml`, rendered once from the
+shared template and then copied byte-for-byte (same `as_token`/`hs_token`) to
+its two other locations — never re-rendered:
+
+1. `{{ _bridge_dir }}/registration.yaml` — rendered from the template; source
+   of truth for the two copies below.
+2. `{{ _bridge_data_dir }}/registration.yaml` — inside the bridge's own data
+   directory (`/data` in its container).
+3. `{{ matrix_base_dir }}/bridges/data/appservices/<bridge_name>-registration.yaml`
+   — Synapse Bridges' appservices directory. `homeserver.yaml` for
+   `synapse_bridges` lists every enabled bridge under
+   `app_service_config_files`.
+
+Synapse Bridges is restarted first when a registration file changes, then
+the bridge itself — so Synapse Bridges has already reloaded the new
+`as_token`/`hs_token` by the time the bridge reconnects.
 
 ## Scope of this first sprint
 

@@ -13,19 +13,22 @@
   become: true
   become_user: "{{ deploy_user }}"
 
+# Handlers run in the order they are defined here, not the order they are
+# notified — Synapse Bridges must reload the registration files (as_token/
+# hs_token) before the bridge itself restarts and reconnects.
+- name: Restart Synapse Bridges after registration change
+  community.docker.docker_compose_v2:
+    project_src: "{{ matrix_base_dir }}/bridges"
+    state: restarted
+  become: true
+  become_user: "{{ deploy_user }}"
+
 # _bridge_dir is set per loop iteration in bridge_instance.yml and flushed
 # immediately (meta: flush_handlers) before the next iteration overwrites it —
 # see bridge_instance.yml for why a plain end-of-play handler would be wrong.
 - name: Restart bridge
   community.docker.docker_compose_v2:
     project_src: "{{ _bridge_dir }}"
-    state: restarted
-  become: true
-  become_user: "{{ deploy_user }}"
-
-- name: Restart Synapse Bridges after registration change
-  community.docker.docker_compose_v2:
-    project_src: "{{ matrix_base_dir }}/bridges"
     state: restarted
   become: true
   become_user: "{{ deploy_user }}"

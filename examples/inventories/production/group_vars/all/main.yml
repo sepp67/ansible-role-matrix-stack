@@ -20,6 +20,13 @@ matrix_bridges_public_baseurl: "https://matrix-bridges.example.com/"
 matrix_bridges_container_name: synapse-bridges
 matrix_bridges_http_port: 8009
 
+# IP de la VM matrix_bridges (= vm-matrix-bridges-prod dans hosts.yml), jamais
+# 127.0.0.1 : Synapse Bridges et chaque bridge tournent dans des projets
+# docker-compose distincts sur cette même VM. Source de vérité unique pour les
+# flux bridge → Synapse (matrix_synapse_internal_url) et Synapse → bridge
+# (matrix_appservice_base_url), tous deux dérivés dans defaults/main.yml.
+matrix_bridges_vm_ip: "10.0.1.12"  # À remplacer par l'IP réelle
+
 matrix_federation_enabled: true
 
 matrix_oidc_enabled: false
