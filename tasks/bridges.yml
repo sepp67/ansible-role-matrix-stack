@@ -13,6 +13,21 @@
 # staging et production).
 # ─────────────────────────────────────────────────────────────────────────────
 
+- name: Assert that environment-specific bridge network variables are set
+  ansible.builtin.assert:
+    that:
+      - matrix_synapse_internal_url is defined
+      - matrix_synapse_internal_url | trim != ""
+      - matrix_appservice_base_url is defined
+      - matrix_appservice_base_url | trim != ""
+    fail_msg: >-
+      matrix_synapse_internal_url et matrix_appservice_base_url doivent être
+      définies dans l'inventaire consommateur (elles n'ont volontairement
+      aucune valeur par défaut dans ce rôle — voir defaults/main.yml). Sans
+      elles, les bridges pointeraient vers une adresse d'exemple invalide.
+    quiet: true
+  when: matrix_bridges_enabled | bool
+
 - name: Create bridges base directory
   ansible.builtin.file:
     path: "{{ matrix_bridges_base_dir }}"

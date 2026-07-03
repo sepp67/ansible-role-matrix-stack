@@ -283,11 +283,13 @@ restarted to load them).
 ```yaml
 matrix_bridges_enabled: true
 
-# Reachable IP (or hostname) of the matrix_bridges VM. Never 127.0.0.1:
-# Synapse Bridges and every bridge run in separate docker-compose projects
-# (separate container networks) even though they share the same VM. Single
-# source of truth for both directions of traffic between them — see below.
-matrix_bridges_vm_ip: "192.168.1.77"
+# Environment-specific — no default in this role, must be set by the
+# consuming inventory (never 127.0.0.1: Synapse Bridges and every bridge run
+# in separate docker-compose projects even though they share the same VM).
+# See "Network topology" below. The `bridges` play fails fast via an
+# ansible.builtin.assert if either is missing.
+matrix_synapse_internal_url: "http://192.168.1.77:{{ matrix_bridges_http_port }}"
+matrix_appservice_base_url: "http://192.168.1.77"
 
 matrix_bridges:
   - name: whatsapp
@@ -335,18 +337,26 @@ adding one entry to `matrix_bridges` (plus its database entry in
 Synapse Bridges and every bridge run on the same VM (`matrix_bridges` group)
 but in **separate docker-compose projects**, so `127.0.0.1` inside one
 container never reaches another. Traffic between them flows in both
-directions, each with its own dedicated URL derived from the single
-`matrix_bridges_vm_ip`:
+directions, each with its own dedicated URL:
 
 - **Bridge → Synapse** (`matrix_synapse_internal_url`, used as
   `homeserver.address` in each bridge's `config.yaml`):
-  `http://{{ matrix_bridges_vm_ip }}:{{ matrix_bridges_http_port }}`.
+  `http://<matrix_bridges VM IP>:{{ matrix_bridges_http_port }}`.
 - **Synapse → bridge** (`matrix_appservice_base_url`, used as `url` in
   `registration.yaml` and `appservice.address` in `config.yaml`):
-  `http://{{ matrix_bridges_vm_ip }}` — each bridge's own
+  `http://<matrix_bridges VM IP>` — each bridge's own
   `appservice_port` is appended to it. The port is published on the VM's
   network interface by `docker-compose` (`mautrix-bridge-compose.yml.j2`),
   which is what makes it reachable from the Synapse Bridges container.
+
+Both variables are **environment-specific and have no default in this
+role** — this role must stay generic and never ship an example address that
+could be used by accident. They are set once in the consuming inventory
+(e.g. the `devops_staging_prod_infra` repo's `group_vars`), never inside
+`ansible-role-matrix-stack` itself and never per-bridge. If either is
+missing, the `bridges` play fails immediately with an explicit
+`ansible.builtin.assert` (see `tasks/bridges.yml`) instead of silently
+falling back to a placeholder IP.
 
 ## Database connection
 

@@ -145,24 +145,24 @@ matrix_bridges_default_permissions:
 # un sous-répertoire {{ matrix_bridges_base_dir }}/<name>/.
 matrix_bridges_base_dir: "{{ matrix_base_dir }}/bridges"
 
-# Adresse IP (ou nom d'hôte) de la VM matrix_bridges, joignable depuis les
-# conteneurs qui y tournent. Synapse Bridges et chaque bridge sont déployés
-# dans des projets docker-compose distincts sur cette même VM : 127.0.0.1 vu
-# depuis l'un ne joint jamais l'autre, même s'ils partagent la même VM. Seule
-# source de vérité pour les deux flux ci-dessous — à définir dans l'inventaire
-# consommateur.
-matrix_bridges_vm_ip: "203.0.113.10"  # Exemple — jamais 127.0.0.1
-
-# URL flux bridge → Synapse Bridges (homeserver.address dans le config.yaml
-# de chaque bridge).
-matrix_synapse_internal_url: "http://{{ matrix_bridges_vm_ip }}:{{ matrix_bridges_http_port }}"
-
-# URL de base flux Synapse Bridges → bridge (registration.yaml `url`,
-# appservice.address dans config.yaml). Le port de chaque bridge
-# (matrix_bridge.appservice_port) est publié sur l'interface de la VM par
-# docker-compose (voir mautrix-bridge-compose.yml.j2) et ajouté à cette base
-# par bridge_instance.yml.
-matrix_appservice_base_url: "http://{{ matrix_bridges_vm_ip }}"
+# matrix_synapse_internal_url et matrix_appservice_base_url — volontairement
+# SANS valeur par défaut ici. Ce sont des adresses réseau propres à chaque
+# environnement (IP de la VM matrix_bridges) ; le rôle doit rester générique
+# et ne jamais embarquer d'adresse d'exemple qui risquerait d'être utilisée
+# par inadvertance. Elles doivent être définies dans l'inventaire consommateur
+# (group_vars), jamais ici. Une assertion (voir tasks/bridges.yml) fait
+# échouer le déploiement des bridges si elles sont absentes.
+#
+# - matrix_synapse_internal_url : flux bridge → Synapse Bridges
+#   (homeserver.address dans le config.yaml de chaque bridge).
+#   Exemple : "http://192.168.1.77:{{ matrix_bridges_http_port }}"
+#
+# - matrix_appservice_base_url : URL de base du flux Synapse Bridges → bridge
+#   (registration.yaml `url`, appservice.address dans config.yaml). Le port
+#   de chaque bridge (matrix_bridge.appservice_port) est publié sur
+#   l'interface de la VM par docker-compose (mautrix-bridge-compose.yml.j2)
+#   et ajouté à cette base par bridge_instance.yml.
+#   Exemple : "http://192.168.1.77"
 
 # Répertoire de persistance des tokens Application Service, sur le poste de
 # contrôle Ansible (pas sur les VMs cibles). Par défaut le dossier "generated/"
